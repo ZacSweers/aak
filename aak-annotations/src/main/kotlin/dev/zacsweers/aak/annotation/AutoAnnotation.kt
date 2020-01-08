@@ -13,4 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package dev.zacsweers.template.sample
+package dev.zacsweers.aak.annotation
+
+import kotlin.annotation.AnnotationRetention.BINARY
+import kotlin.annotation.AnnotationTarget.CLASS
+import kotlin.annotation.AnnotationTarget.FUNCTION
+
+/**
+ * TODO doc
+ */
+@Target(FUNCTION, CLASS)
+@Retention(BINARY)
+annotation class AutoAnnotation
