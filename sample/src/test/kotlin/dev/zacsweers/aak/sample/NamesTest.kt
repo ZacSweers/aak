@@ -34,7 +34,7 @@ class NamesTest {
     val genericAnnotation = Names.genericAnnotation<String>()
     // TODO this access results in a ClassCastException at runtime
     //  kotlin.jvm.internal.ClassReference cannot be cast to java.lang.Class
-//    assertThat(genericAnnotation.generic.toString()).isEqualTo("")
+    assertThat(genericAnnotation.generic).isEqualTo(String::class)
     assertThat(genericAnnotation.hashCode()).isEqualTo(0)
     assertThat(genericAnnotation.toString()).isEqualTo("AakProxy_Names#genericAnnotation")
     assertThat(genericAnnotation == genericAnnotation).isFalse()

@@ -52,6 +52,7 @@ import javax.lang.model.util.ElementFilter
 import javax.tools.Diagnostic.Kind.ERROR
 import net.ltgt.gradle.incap.IncrementalAnnotationProcessor
 import net.ltgt.gradle.incap.IncrementalAnnotationProcessorType.ISOLATING
+import kotlin.reflect.KClass
 
 @KotlinPoetMetadataPreview
 @AutoService(Processor::class)
@@ -185,8 +186,11 @@ class AakProcessor : AbstractProcessor() {
         .addStatement("val %L = %T { _, %L, _ ->", handlerVar, InvocationHandler::class, methodParam)
         .addCode("«  when (val %L = %L.name) {", methodName, methodParam)
         .apply {
-          for (name in attributes.keys) {
+          for ((name, value) in attributes.entries) {
             addCode("\n  %1S -> %1L", name)
+            if (value == KClass::class.asClassName()) {
+              addCode(".java")
+            }
           }
         }
         .addCode("\n  %S -> %S", "toString", "AakProxy_${targetClass.simpleNames.joinToString("_") { it.capitalize() }}#${method.simpleName}")
