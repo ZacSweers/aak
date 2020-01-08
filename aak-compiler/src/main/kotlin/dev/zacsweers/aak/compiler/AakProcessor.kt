@@ -19,13 +19,14 @@ package dev.zacsweers.aak.compiler
 
 import com.google.auto.common.MoreElements
 import com.google.auto.service.AutoService
-import com.squareup.kotlinpoet.ANY
 import com.squareup.kotlinpoet.ClassName
+import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.FileSpec
 import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.NameAllocator
 import com.squareup.kotlinpoet.ParameterSpec
 import com.squareup.kotlinpoet.ParameterizedTypeName
+import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeVariableName
 import com.squareup.kotlinpoet.asClassName
@@ -107,10 +108,34 @@ class AakProcessor : AbstractProcessor() {
 
     for ((type, functions) in functionElements) {
       val typeElement = type.tag<TypeElement>()!!
-      val generatedFunctions = functions.mapNotNull { processFunctionElement(typeElement, it) }
+      val targetClass = typeElement.asClassName()
+      val generatedFunctions = functions.mapNotNull { method ->
+        val returnType = method.returnType
+        if (returnType.kind != TypeKind.DECLARED) {
+          processingEnv.messager.printMessage(ERROR, "Return type is not an annotation!", method)
+          return@mapNotNull null
+        }
+        val returnElement = (returnType as DeclaredType).asElement() as TypeElement
+        if (returnElement.kind != ElementKind.ANNOTATION_TYPE) {
+          processingEnv.messager.printMessage(ERROR, "Return type is not an annotation!", method)
+          return@mapNotNull null
+        }
+
+        val methodName = method.simpleName
+        val name = "aak_${targetClass.simpleNames.joinToString(
+            "_") { it.decapitalize() }}_$methodName"
+        val toStringName = "AakProxy_${targetClass.simpleNames.joinToString(
+            "_") { it.capitalize() }}#$methodName"
+        createFunSpec(name, returnElement, toStringName)?.toBuilder()
+            ?.addOriginatingElement(typeElement)
+            ?.build()
+      }
 
       // TODO if this is a facade we need to strip "Kt" suffix from the type element name
-      FileSpec.builder(MoreElements.getPackage(typeElement).qualifiedName.toString(), "${typeElement.simpleName}Annotations")
+      FileSpec.builder(
+          packageName = MoreElements.getPackage(typeElement).qualifiedName.toString(),
+          fileName = "${typeElement.simpleName}Annotations"
+      )
           .apply {
             for (function in generatedFunctions) {
               addFunction(function)
@@ -126,7 +151,28 @@ class AakProcessor : AbstractProcessor() {
     return true
   }
 
-  private fun processFunctionElement(type: TypeElement, method: ExecutableElement): FunSpec? {
+  private fun createFunSpec(
+    name: String,
+    annotationType: TypeElement,
+    toStringName: String = name
+  ): FunSpec? {
+    val metadata = annotationType.getAnnotation(Metadata::class.java)
+
+    // TODO capture whether or not methods have defaults
+    val annotationData = if (metadata == null) {
+      javaAnnotationApi(annotationType)
+    } else {
+      kotlinAnnotationApi(MoreElements.getPackage(annotationType).toString(), metadata)
+    }
+
+    return createFunSpec(name, annotationData, toStringName)
+  }
+
+  private fun createFunSpec(
+    name: String,
+    annotationData: AnnotationData,
+    toStringName: String = name
+  ): FunSpec? {
     //
     // Given
     //
@@ -136,63 +182,34 @@ class AakProcessor : AbstractProcessor() {
     //
     // fun aak_names_foo(<all annotations>) = A
     //
-    val returnType = method.returnType
-    if (returnType.kind != TypeKind.DECLARED) {
-      processingEnv.messager.printMessage(ERROR, "Return type is not an annotation!", method)
-      return null
-    }
-    val returnElement = (returnType as DeclaredType).asElement() as TypeElement
-    if (returnElement.kind != ElementKind.ANNOTATION_TYPE) {
-      processingEnv.messager.printMessage(ERROR, "Return type is not an annotation!", method)
-      return null
-    }
-    val metadata = returnElement.getAnnotation(Metadata::class.java)
-
-    // TODO capture whether or not methods have defaults
     val allocator = NameAllocator()
-    val attributes = if (metadata == null) {
-      javaAnnotationApi(returnElement)
-    } else {
-      kotlinAnnotationApi(metadata)
-    }.mapKeys { allocator.newName(it.key) }
+    val members = annotationData.members.map { it.copy(name = allocator.newName(it.name)) }
 
-    val targetClass = type.asClassName()
     val handlerVar = allocator.newName("handler")
     val methodParam = allocator.newName("method")
     val methodName = allocator.newName("methodName")
-    val returnClassName = returnElement.asClassName()
-    val returnTypeName = returnType.asTypeName()
-    return FunSpec.builder("aak_${targetClass.simpleNames.joinToString("_") { it.decapitalize() }}_${method.simpleName}")
-        .addOriginatingElement(type)
+    val returnClassName = annotationData.type.rawType
+    return FunSpec.builder(name)
         .apply {
-          if (returnTypeName is ParameterizedTypeName) {
-            returnTypeName.typeArguments
-                .filterIsInstanceTo<TypeVariableName, MutableSet<TypeVariableName>>(mutableSetOf())
-                .forEach {
-                  // TODO Pull these from the actual funspec rather than add an Any
-                  val finalVar = if (ANY in it.bounds) {
-                    it
-                  } else {
-                    it.copy(bounds = it.bounds + ANY)
-                  }
-                  addTypeVariable(finalVar)
-                }
+          if (annotationData.type is ParameterizedTypeName) {
+            addTypeVariables(annotationData.type.typeArguments.filterIsInstance<TypeVariableName>())
           }
         }
-        .addParameters(attributes.map { (name, type) ->
+        .addParameters(members.map { (name, type, defaultValue) ->
           ParameterSpec.builder(name, type).build()
         })
-        .returns(returnTypeName)
+        .returns(annotationData.type)
         // TODO indent properly rather than the custom leading spacing
-        .addStatement("val %L = %T { _, %L, _ ->⇥", handlerVar, InvocationHandler::class, methodParam)
+        .addStatement("val %L = %T { _, %L, _ ->⇥", handlerVar, InvocationHandler::class,
+            methodParam)
         .addStatement("when (val %L = %L.name) {⇥", methodName, methodParam)
         .apply {
-          for ((name, value) in attributes.entries) {
+          for ((attrName, value, _) in members) {
             val possibleSuffix = if (value.isKClassType()) ".java" else ""
-            addStatement("%1S -> %1L$possibleSuffix", name)
+            addStatement("%1S -> %1L$possibleSuffix", attrName)
           }
         }
-        .addStatement("%S -> %S", "toString", "AakProxy_${targetClass.simpleNames.joinToString("_") { it.capitalize() }}#${method.simpleName}")
+        .addStatement("%S -> %S", "toString", toStringName)
         // TODO proper hashcode/equals?
 //        .addStatement("%S -> %T.hash(%L)", "hashCode", Objects::class, attributes.keys.map { CodeBlock.of("%L", it) }.joinToCode(", "))
         .addStatement("%S -> 0", "hashCode")
@@ -201,13 +218,24 @@ class AakProcessor : AbstractProcessor() {
         .addStatement("⇤}")
         .addStatement("⇤}")
         .apply {
-          if (returnTypeName is ParameterizedTypeName) {
+          if (annotationData.type is ParameterizedTypeName) {
             addStatement("@%T(%S)", Suppress::class, "UNCHECKED_CAST")
           }
         }
-        .addStatement("return %1T.newProxyInstance(%2T::class.java.classLoader, arrayOf(%2T::class.java), %3L) as %4T", Proxy::class.asClassName(), returnClassName, handlerVar, returnTypeName)
+        .addStatement(
+            "return %1T.newProxyInstance(%2T::class.java.classLoader, arrayOf(%2T::class.java), %3L) as %4T",
+            Proxy::class.asClassName(), returnClassName, handlerVar, annotationData.type)
         .build()
   }
+
+  private val TypeName.rawType: ClassName
+    get() {
+      return when (this) {
+        is ClassName -> this
+        is ParameterizedTypeName -> rawType
+        else -> error("Must be a class name or parameterized class name")
+      }
+    }
 
   private fun TypeName.isKClassType(): Boolean {
     return when (this) {
@@ -217,15 +245,48 @@ class AakProcessor : AbstractProcessor() {
     }
   }
 
-  private fun javaAnnotationApi(type: TypeElement): Map<String, TypeName> {
-    return ElementFilter.methodsIn(type.enclosedElements)
-        .associate { it.simpleName.toString() to it.returnType.asTypeName() }
+  private fun javaAnnotationApi(type: TypeElement): AnnotationData {
+    return AnnotationData(
+        type = type.asType().asTypeName(),
+        members = ElementFilter.methodsIn(type.enclosedElements)
+            .map {
+              AnnotationAttribute(
+                  it.simpleName.toString(),
+                  it.returnType.asTypeName(),
+                  null // TODO parse default values
+              )
+            }
+    )
   }
 
-  private fun kotlinAnnotationApi(metadata: Metadata): Map<String, TypeName> {
+  private fun kotlinAnnotationApi(packageName: String, metadata: Metadata): AnnotationData {
     val kotlinApi = metadata.toImmutableKmClass().toTypeSpec(classInspector)
-    return kotlinApi.propertySpecs.associate {
-      it.name to it.type
-    }
+    val resolvedPackageName = metadata.packageName.ifBlank { packageName }
+    val className = ClassName(resolvedPackageName, kotlinApi.name!!)
+    return AnnotationData(
+        type = if (kotlinApi.typeVariables.isNotEmpty()) {
+          className.parameterizedBy(kotlinApi.typeVariables)
+        } else {
+          className
+        },
+        members = kotlinApi.propertySpecs.map {
+          AnnotationAttribute(
+              it.name,
+              it.type,
+              null // TODO parse default values
+          )
+        }
+    )
   }
 }
+
+data class AnnotationData(
+  val type: TypeName,
+  val members: List<AnnotationAttribute>
+)
+
+data class AnnotationAttribute(
+  val name: String,
+  val type: TypeName,
+  val defaultValue: CodeBlock?
+)
