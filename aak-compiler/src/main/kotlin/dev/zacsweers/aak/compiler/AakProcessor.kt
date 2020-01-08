@@ -183,24 +183,22 @@ class AakProcessor : AbstractProcessor() {
         })
         .returns(returnTypeName)
         // TODO indent properly rather than the custom leading spacing
-        .addStatement("val %L = %T { _, %L, _ ->", handlerVar, InvocationHandler::class, methodParam)
-        .addCode("«  when (val %L = %L.name) {", methodName, methodParam)
+        .addStatement("val %L = %T { _, %L, _ ->⇥", handlerVar, InvocationHandler::class, methodParam)
+        .addCode("when (val %L = %L.name) {⇥", methodName, methodParam)
         .apply {
           for ((name, value) in attributes.entries) {
-            addCode("\n  %1S -> %1L", name)
-            if (value == KClass::class.asClassName()) {
-              addCode(".java")
-            }
+            val possibleSuffix = if (value == KClass::class.asClassName()) ".java" else ""
+            addStatement("%1S -> %1L$possibleSuffix", name)
           }
         }
-        .addCode("\n  %S -> %S", "toString", "AakProxy_${targetClass.simpleNames.joinToString("_") { it.capitalize() }}#${method.simpleName}")
+        .addStatement("%S -> %S", "toString", "AakProxy_${targetClass.simpleNames.joinToString("_") { it.capitalize() }}#${method.simpleName}")
         // TODO proper hashcode/equals?
-//        .addCode("\n  %S -> %T.hash(%L)", "hashCode", Objects::class, attributes.keys.map { CodeBlock.of("%L", it) }.joinToCode(", "))
-        .addCode("\n  %S -> 0", "hashCode")
-        .addCode("\n  %S -> false", "equals")
-        .addCode("\n  else -> error(\"Unrecognized method call: ${'$'}$methodName\")")
-        .addCode("\n»  }\n")
-        .addStatement("}")
+//        .addStatement("%S -> %T.hash(%L)", "hashCode", Objects::class, attributes.keys.map { CodeBlock.of("%L", it) }.joinToCode(", "))
+        .addStatement("%S -> 0", "hashCode")
+        .addStatement("%S -> false", "equals")
+        .addStatement("else -> error(\"Unrecognized method call: ${'$'}$methodName\")")
+        .addStatement("⇤}")
+        .addStatement("⇤}")
         .addStatement("return %1T.newProxyInstance(%2T::class.java.classLoader, arrayOf(%2T::class.java), %3L) as %4T", Proxy::class.asClassName(), returnClassName, handlerVar, returnTypeName)
         .build()
   }
