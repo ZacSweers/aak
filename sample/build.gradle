@@ -20,7 +20,8 @@ plugins {
 }
 
 dependencies {
-  implementation project(':template')
+  kapt project(':aak-compiler')
+  compileOnly project(':aak-annotations')
   implementation deps.kotlin.stdlibjdk8
 
   testImplementation deps.test.junit
