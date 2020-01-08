@@ -20,6 +20,7 @@ package dev.zacsweers.aak.compiler
 import com.google.auto.common.MoreElements
 import com.google.auto.service.AutoService
 import com.squareup.kotlinpoet.ANY
+import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.FileSpec
 import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.NameAllocator
@@ -184,10 +185,10 @@ class AakProcessor : AbstractProcessor() {
         .returns(returnTypeName)
         // TODO indent properly rather than the custom leading spacing
         .addStatement("val %L = %T { _, %L, _ ->⇥", handlerVar, InvocationHandler::class, methodParam)
-        .addCode("when (val %L = %L.name) {⇥", methodName, methodParam)
+        .addStatement("when (val %L = %L.name) {⇥", methodName, methodParam)
         .apply {
           for ((name, value) in attributes.entries) {
-            val possibleSuffix = if (value == KClass::class.asClassName()) ".java" else ""
+            val possibleSuffix = if (value.isKClassType()) ".java" else ""
             addStatement("%1S -> %1L$possibleSuffix", name)
           }
         }
@@ -206,6 +207,14 @@ class AakProcessor : AbstractProcessor() {
         }
         .addStatement("return %1T.newProxyInstance(%2T::class.java.classLoader, arrayOf(%2T::class.java), %3L) as %4T", Proxy::class.asClassName(), returnClassName, handlerVar, returnTypeName)
         .build()
+  }
+
+  private fun TypeName.isKClassType(): Boolean {
+    return when (this) {
+      is ClassName -> this == KClass::class.asClassName()
+      is ParameterizedTypeName -> rawType.isKClassType()
+      else -> false
+    }
   }
 
   private fun javaAnnotationApi(type: TypeElement): Map<String, TypeName> {
