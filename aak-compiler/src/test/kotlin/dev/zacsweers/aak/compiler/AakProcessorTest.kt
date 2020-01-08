@@ -37,7 +37,7 @@ class AakProcessorTest {
   @Test
   fun testing() {
     val result = compile(kotlin("source.kt", """
-        
+
         """))
     assertThat(result.exitCode).isEqualTo(KotlinCompilation.ExitCode.OK)
   }

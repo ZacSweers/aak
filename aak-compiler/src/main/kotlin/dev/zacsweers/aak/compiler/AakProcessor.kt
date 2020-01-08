@@ -50,9 +50,9 @@ import javax.lang.model.type.DeclaredType
 import javax.lang.model.type.TypeKind
 import javax.lang.model.util.ElementFilter
 import javax.tools.Diagnostic.Kind.ERROR
+import kotlin.reflect.KClass
 import net.ltgt.gradle.incap.IncrementalAnnotationProcessor
 import net.ltgt.gradle.incap.IncrementalAnnotationProcessorType.ISOLATING
-import kotlin.reflect.KClass
 
 @KotlinPoetMetadataPreview
 @AutoService(Processor::class)
