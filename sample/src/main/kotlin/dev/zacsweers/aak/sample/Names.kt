@@ -37,7 +37,7 @@ object Names {
   }
 
   // Can't do reified because they're synthetic and therefore not visible from apt
-  @AutoAnnotation inline fun <T : Any> genericAnnotation(target: KClass<T>): GenericAnnotation<T> {
+  @AutoAnnotation fun <T : Any> genericAnnotation(target: KClass<T>): GenericAnnotation<T> {
     return aak_names_genericAnnotation(target)
   }
 
