@@ -27,6 +27,7 @@ spotless {
   format 'misc', {
     target '**/*.md', '**/.gitignore'
     targetExclude "**/.gradle/**"
+    targetExclude "**/build/**"
     indentWithTabs()
     trimTrailingWhitespace()
     endWithNewline()
@@ -34,6 +35,7 @@ spotless {
   kotlin {
     target "**/*.kt", "**/*.kt"
     targetExclude(copiedKotlinFiles)
+    targetExclude "**/build/**"
     ktlint(deps.versions.ktlint).userData(deps.build.ktlintUserData)
     licenseHeaderFile rootProject.file('spotless/copyright.kt')
     trimTrailingWhitespace()
@@ -48,6 +50,7 @@ spotless {
   java {
     target "**/*.java"
     targetExclude(copiedJavaFiles)
+    targetExclude "**/build/**"
     googleJavaFormat(deps.versions.gjf)
     licenseHeaderFile rootProject.file('spotless/copyright.java')
     removeUnusedImports()
@@ -56,6 +59,7 @@ spotless {
   }
   groovyGradle {
     target '**/*.gradle'
+    targetExclude "**/build/**"
     trimTrailingWhitespace()
     endWithNewline()
   }
