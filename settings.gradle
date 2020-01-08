@@ -41,6 +41,8 @@ pluginManagement {
   }
 }
 
-rootProject.name = 'template-root'
-include 'template'
+rootProject.name = 'aak-root'
+include 'aak-annotations'
+include 'aak-core'
+include 'aak-compiler'
 include 'sample'
