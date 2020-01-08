@@ -199,6 +199,11 @@ class AakProcessor : AbstractProcessor() {
         .addStatement("else -> error(\"Unrecognized method call: ${'$'}$methodName\")")
         .addStatement("⇤}")
         .addStatement("⇤}")
+        .apply {
+          if (returnTypeName is ParameterizedTypeName) {
+            addStatement("@%T(%S)", Suppress::class, "UNCHECKED_CAST")
+          }
+        }
         .addStatement("return %1T.newProxyInstance(%2T::class.java.classLoader, arrayOf(%2T::class.java), %3L) as %4T", Proxy::class.asClassName(), returnClassName, handlerVar, returnTypeName)
         .build()
   }
