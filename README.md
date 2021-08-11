@@ -1,50 +1,6 @@
-AAK (Auto-Annotation-Kotlin)
-============================
+# DEPRECATED
 
-## 🚧 Under construction 🚧 ##
-
-An annotation processor to generate `Proxy`-based helper methods for creating Kotlin annotations at
-runtime. Based on Google's (TODO link) AutoAnnotation processor for Java.
-
-### Example usage
-
-Create a function annotated with `@AutoAnnotation` that returns the desired annotation type. A function
-with the `aak_` prefix + any class names + the function name will be generated with all the annotation 
-values as parameters.
-
-```kotlin
-annotation class Named(val name: String)
-
-object Names {
-  @AutoAnnotation fun nameAnnotation(name: String): Named {
-    return aak_names_nameAnnotation(name)
-  }
-}
-```
-
-Will generate a function like this:
-
-```kotlin
-fun aak_names_nameAnnotation(name: String): Named {
-  val handler = InvocationHandler { _, method, _ ->
-    when (val methodName = method.name) {
-        "name" -> name
-        "toString" -> "AakProxy_Names#nameAnnotation"
-        "hashCode" -> 0
-        "equals" -> false
-        else -> error("Unrecognized method call: $methodName")
-    }
-  }
-  return Proxy.newProxyInstance(Named::class.java.classLoader, arrayOf(Named::class.java), handler)
-      as Named
-}
-```
-
-### TODO
-
-- Extract core artifact for reuse in other annotation processors.
-- Publish snapshots + first release.
-- Allow annotating annotations directly to generate helper methods for them.
+This feature is coming to Kotlin in 1.6
 
 License
 -------
